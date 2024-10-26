@@ -7,17 +7,46 @@ const RoomPage = () => {
   const [remoteSocketId, setRemoteSocketId] = useState(null);
   const [myStream, setMyStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
+  const [videoEnable, setVideoEnabled] = useState(true);
+  const [audioEnable, setAudioEnable] = useState(true);
+
+  const toggleVideo = () => {
+    if (myStream) {
+      myStream
+        .getVideoTracks()
+        .forEach((track) => (track.enabled = !track.enabled));
+
+      setVideoEnabled(false);
+    }
+  };
+
+  const toggleAudio = () => {
+    if (myStream) {
+      myStream
+        .getAudioTracks()
+        .forEach((track) => (track.enabled = !track.enabled));
+      setAudioEnable(false);
+    }
+  };
 
   const handleUserJoined = useCallback(({ email, id }) => {
     console.log("Email", email, "has joined");
     setRemoteSocketId(id);
   }, []);
 
+  const sendStream = useCallback(() => {
+    myStream.getTracks().forEach((track) => {
+      peer.peer.addTrack(track, myStream);
+    });
+  }, [myStream]);
+
+
+
   const handleUserCall = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: false,
+        audio: true,
       });
       const offer = await peer.getOffer();
 
@@ -35,7 +64,7 @@ const RoomPage = () => {
         setRemoteSocketId(from);
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: false,
+          audio: true,
         });
         setMyStream(stream);
 
@@ -48,11 +77,7 @@ const RoomPage = () => {
     [socket]
   );
 
-  const sendStream = useCallback(() => {
-    myStream.getTracks().forEach((track) => {
-      peer.peer.addTrack(track, myStream);
-    });
-  }, [myStream]);
+
 
   const handleCallAccepted = useCallback(
     ({ from, ans }) => {
@@ -62,6 +87,8 @@ const RoomPage = () => {
     },
     [sendStream]
   );
+
+
 
   const handleNegotiation = useCallback(async () => {
     const offer = await peer.getOffer();
@@ -80,6 +107,8 @@ const RoomPage = () => {
     await peer.setLocalDescription(ans);
   }, []);
 
+
+
   useEffect(() => {
     peer.peer.addEventListener("negotiationneeded", handleNegotiation);
     return () => {
@@ -87,12 +116,16 @@ const RoomPage = () => {
     };
   }, [handleNegotiation]);
 
+
+
   useEffect(() => {
     peer.peer.addEventListener("track", (ev) => {
       const [stream] = ev.streams;
       setRemoteStream(stream);
     });
   }, []);
+
+
 
   useEffect(() => {
     socket.on("user:joined", handleUserJoined);
@@ -117,6 +150,8 @@ const RoomPage = () => {
     handleNegotiationFinal,
   ]);
 
+
+  
   return (
     <div>
       <h1>Room Page</h1>
@@ -124,20 +159,29 @@ const RoomPage = () => {
       {myStream && <button onClick={sendStream}>Accept Call</button>}
       {remoteSocketId && <button onClick={handleUserCall}>Call</button>}
       {myStream && (
-        <div>
-          <h1>My Stream</h1>
-          <video
-            playsInline
-            muted
-            autoPlay
-            height="500px"
-            width="700px"
-            style={{ transform: "scaleX(-1)" }}
-            ref={(video) => {
-              if (video) video.srcObject = myStream;
-            }}
-          />
-        </div>
+        <>
+          <div>
+            <h1>My Stream</h1>
+            <video
+              playsInline
+              autoPlay
+              height="500px"
+              width="700px"
+              style={{ transform: "scaleX(-1)" }}
+              ref={(video) => {
+                if (video) video.srcObject = myStream;
+              }}
+            />
+          </div>
+          <div>
+            <button onClick={toggleVideo}>
+              {videoEnable ? "Turn off video" : "Turn on video"}
+            </button>
+            <button onClick={toggleAudio}>
+              {audioEnable ? "Turn off audio" : "Turn on audio"}
+            </button>
+          </div>
+        </>
       )}
       {remoteStream && (
         <div>
