@@ -26,10 +26,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("user:call", ({ toUser, offer }) => {
-    // console.log("user:call", toUser, " ", offer);
+    console.log("user:call", toUser, " ", offer);
 
     // send the offer of the user who call to the user whom to be called
     // socket.id is current user
     io.to(toUser).emit("incoming:call", { from: socket.id, offer });
+  });
+
+  socket.on("call:accepted", ({ to, ans }) => {
+    io.to(to).emit("call:accepted", { from: socket.id, ans });
   });
 });
