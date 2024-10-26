@@ -1,62 +1,66 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useSocket } from "../context/SocketProvider";
 import peer from "../services/Peer";
-import ReactPlayer from "react-player";
 
 const RoomPage = () => {
   const socket = useSocket();
   const [remoteSocketId, setRemoteSocketId] = useState(null);
-  const [myStream, setMyStream] = useState();
-  const [remoteStream, setRemoteStream] = useState();
+  const [myStream, setMyStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
 
   const handleUserJoined = useCallback(({ email, id }) => {
-    console.log("Email ", email, "has join in");
+    console.log("Email", email, "has joined");
     setRemoteSocketId(id);
   }, []);
 
   const handleUserCall = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: false,
-    });
-    const offer = await peer.getOffer();
-
-    socket.emit("user:call", { toUser: remoteSocketId, offer });
-
-    // console.log(stream);
-    setMyStream(stream);
-  }, [remoteSocketId, socket]);
-
-  const handleIncomingCall = useCallback(
-    async ({ from, offer }) => {
-      console.log("Incoming Call", from, offer);
-      setRemoteSocketId(from);
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: false,
       });
-      setMyStream(stream);
-      console.log({ from, offer });
-      const ans = await peer.getAnswer(offer);
+      const offer = await peer.getOffer();
 
-      socket.emit("call:accepted", { to: from, ans });
+      socket.emit("user:call", { toUser: remoteSocketId, offer });
+      setMyStream(stream);
+    } catch (error) {
+      console.error("Error accessing media devices:", error);
+    }
+  }, [remoteSocketId, socket]);
+
+  const handleIncomingCall = useCallback(
+    async ({ from, offer }) => {
+      try {
+        console.log("Incoming Call", from, offer);
+        setRemoteSocketId(from);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        setMyStream(stream);
+
+        const ans = await peer.getAnswer(offer);
+        socket.emit("call:accepted", { to: from, ans });
+      } catch (error) {
+        console.error("Error handling incoming call:", error);
+      }
     },
     [socket]
   );
 
-  const sendStrem = useCallback(() => {
-    for (const track of myStream.getTracks()) {
+  const sendStream = useCallback(() => {
+    myStream.getTracks().forEach((track) => {
       peer.peer.addTrack(track, myStream);
-    }
+    });
   }, [myStream]);
 
   const handleCallAccepted = useCallback(
     ({ from, ans }) => {
       peer.setLocalDescription(ans);
-      console.log("Call Accepted !");
-      sendStrem();
+      console.log("Call Accepted!");
+      sendStream();
     },
-    [sendStrem]
+    [sendStream]
   );
 
   const handleNegotiation = useCallback(async () => {
@@ -64,7 +68,7 @@ const RoomPage = () => {
     socket.emit("peer:negotiation", { offer, to: remoteSocketId });
   }, [remoteSocketId, socket]);
 
-  const handleIncommingNegotiation = useCallback(
+  const handleIncomingNegotiation = useCallback(
     async ({ from, offer }) => {
       const ans = await peer.getAnswer(offer);
       socket.emit("peer:nego:done", { to: from, ans });
@@ -78,16 +82,15 @@ const RoomPage = () => {
 
   useEffect(() => {
     peer.peer.addEventListener("negotiationneeded", handleNegotiation);
-
     return () => {
       peer.peer.removeEventListener("negotiationneeded", handleNegotiation);
     };
-  });
+  }, [handleNegotiation]);
 
   useEffect(() => {
-    peer.peer.addEventListener("track", async (ev) => {
-      const remoteStream = ev.streams;
-      setRemoteStream(remoteStream[0]);
+    peer.peer.addEventListener("track", (ev) => {
+      const [stream] = ev.streams;
+      setRemoteStream(stream);
     });
   }, []);
 
@@ -95,58 +98,63 @@ const RoomPage = () => {
     socket.on("user:joined", handleUserJoined);
     socket.on("incoming:call", handleIncomingCall);
     socket.on("call:accepted", handleCallAccepted);
-    socket.on("peer:negotiation", handleIncommingNegotiation);
+    socket.on("peer:negotiation", handleIncomingNegotiation);
     socket.on("peer:nego:final", handleNegotiationFinal);
 
     return () => {
       socket.off("user:joined", handleUserJoined);
       socket.off("incoming:call", handleIncomingCall);
       socket.off("call:accepted", handleCallAccepted);
-      socket.off("peer:negotiation", handleIncommingNegotiation);
+      socket.off("peer:negotiation", handleIncomingNegotiation);
       socket.off("peer:nego:final", handleNegotiationFinal);
     };
   }, [
     socket,
-    handleUserCall,
+    handleUserJoined,
     handleIncomingCall,
     handleCallAccepted,
-    handleIncommingNegotiation,
+    handleIncomingNegotiation,
     handleNegotiationFinal,
   ]);
 
   return (
-    <>
+    <div>
       <h1>Room Page</h1>
       <h2>{remoteSocketId ? "Connected" : "No one in room"}</h2>
-      {myStream && <button onClick={sendStrem}>Accept Call</button>}
-      {remoteSocketId && <button onClick={handleUserCall}>CALL</button>}
+      {myStream && <button onClick={sendStream}>Accept Call</button>}
+      {remoteSocketId && <button onClick={handleUserCall}>Call</button>}
       {myStream && (
-        <>
+        <div>
           <h1>My Stream</h1>
-          <ReactPlayer
-            playing
+          <video
+            playsInline
             muted
+            autoPlay
             height="500px"
             width="700px"
-            url={myStream}
             style={{ transform: "scaleX(-1)" }}
+            ref={(video) => {
+              if (video) video.srcObject = myStream;
+            }}
           />
-        </>
+        </div>
       )}
       {remoteStream && (
-        <>
+        <div>
           <h1>Remote Stream</h1>
-          <ReactPlayer
-            playing
-            muted
+          <video
+            playsInline
+            autoPlay
             height="500px"
             width="700px"
-            url={remoteStream}
             style={{ transform: "scaleX(-1)" }}
+            ref={(video) => {
+              if (video) video.srcObject = remoteStream;
+            }}
           />
-        </>
+        </div>
       )}
-    </>
+    </div>
   );
 };
 
