@@ -37,6 +37,11 @@ io.on("connection", (socket) => {
     io.to(to).emit("call:accepted", { from: socket.id, ans });
   });
 
+  socket.on("peer:candidate", ({ candidate, to }) => {
+    console.log("candidate", { candidate, to });
+    io.to(to).emit("peer:candidate", { candidate });
+  });
+
   socket.on("peer:negotiation", ({ to, offer }) => {
     io.to(to).emit("peer:negotiation", { from: socket.id, offer });
   });
