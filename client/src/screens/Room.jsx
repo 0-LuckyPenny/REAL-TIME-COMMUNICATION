@@ -4,15 +4,30 @@ import PeerServices from "../services/Peer"; // Import as a class
 
 const RoomPage = () => {
   const socket = useSocket();
-  const [peer] = useState(new PeerServices()); // Instantiate PeerServices and store it in state
   const [remoteSocketId, setRemoteSocketId] = useState(null);
   const [videoEnable, setVideoEnabled] = useState(true);
   const [audioEnable, setAudioEnable] = useState(true);
   const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]); // State to store chat messages
 
   const myVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const myStream = useRef(null);
+
+  // Callback to add received messages to the chat
+  const handleReceivedMessage = (message) => {
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      { text: message, fromSelf: false },
+    ]);
+  };
+
+  // Instantiate PeerServices with the callback for receiving messages
+  const [peer] = useState(new PeerServices(handleReceivedMessage));
+
+  const addMessage = (text, fromSelf) => {
+    setMessages((prevMessages) => [...prevMessages, { text, fromSelf }]);
+  };
 
   const toggleVideo = () => {
     if (myStream.current) {
@@ -177,6 +192,7 @@ const RoomPage = () => {
 
   const handleSendMessage = () => {
     peer.sendMessage(message);
+    addMessage(message, true); // Add message to chat as from self
     setMessage("");
   };
 
@@ -220,6 +236,24 @@ const RoomPage = () => {
       {remoteSocketId && (
         <div>
           <h2>Chat</h2>
+          <div className="chat-box">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                style={{
+                  border: "1px solid black",
+                  textAlign: msg.fromSelf ? "right" : "left",
+                  backgroundColor: msg.fromSelf ? "#BFECFF" : "#CDC1FF",
+                  padding: "5px",
+                  borderRadius: "8px",
+                  margin: "5px",
+                  maxWidth: "50%",
+                  alignSelf: msg.fromSelf ? "flex-end" : "flex-start",
+                }}>
+                {msg.text}
+              </div>
+            ))}
+          </div>
           <input
             type="text"
             value={message}

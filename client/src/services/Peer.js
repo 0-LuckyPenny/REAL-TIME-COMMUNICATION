@@ -1,5 +1,5 @@
 class PeerServices {
-  constructor() {
+  constructor(onMessageCallback) {
     if (!this.peer) {
       if (PeerServices.instance) {
         return PeerServices.instance;
@@ -20,7 +20,7 @@ class PeerServices {
       // Set up the data channel for chat
       const chatChannel = this.peer.createDataChannel("chat");
       console.log("chat channel created ", chatChannel);
-      chatChannel.onmessage = (e) => console.log("Message received: " + e.data);
+      chatChannel.onmessage = (e) => onMessageCallback(e.data);
       chatChannel.onopen = () => console.log("Chat channel opened.");
       chatChannel.onclose = () => console.log("Chat channel closed.");
 
@@ -28,8 +28,7 @@ class PeerServices {
       this.peer.ondatachannel = (e) => {
         const receiveChannel = e.channel;
         console.log("rec channel ", receiveChannel);
-        receiveChannel.onmessage = (e) =>
-          console.log("Message received: " + e.data);
+      receiveChannel.onmessage = (e) => onMessageCallback(e.data);
         this.peer.channel = receiveChannel;
       };
     }
