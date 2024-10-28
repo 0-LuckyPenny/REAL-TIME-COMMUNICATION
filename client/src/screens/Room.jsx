@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "../context/SocketProvider";
-import peer from "../services/Peer";
+import PeerServices from "../services/Peer"; // Import as a class
 
 const RoomPage = () => {
   const socket = useSocket();
+  const [peer] = useState(new PeerServices()); // Instantiate PeerServices and store it in state
   const [remoteSocketId, setRemoteSocketId] = useState(null);
   const [videoEnable, setVideoEnabled] = useState(true);
   const [audioEnable, setAudioEnable] = useState(true);
+  const [message, setMessage] = useState("");
 
   const myVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -42,52 +44,57 @@ const RoomPage = () => {
     } catch (error) {
       console.error("Error initiating call:", error);
     }
-  }, [remoteSocketId, socket]);
+  }, [peer, remoteSocketId, socket]);
 
   const handleIncomingCall = useCallback(
     async ({ from, offer }) => {
       try {
-        console.log("Incoming Call", from, offer);
         setRemoteSocketId(from);
-
         const answer = await peer.getAnswer(offer);
         socket.emit("call:accepted", { to: from, ans: answer });
       } catch (error) {
         console.error("Error handling incoming call:", error);
       }
     },
-    [socket]
+    [peer, socket]
   );
 
-  const handleCallAccepted = useCallback(({ from, ans }) => {
-    peer.setLocalDescription(ans);
-    console.log("Call Accepted!");
-  }, []);
+  const handleCallAccepted = useCallback(
+    ({ from, ans }) => {
+      peer.setLocalDescription(ans);
+    },
+    [peer]
+  );
 
   const handleNegotiation = useCallback(async () => {
     const offer = await peer.getCompleteOffer();
     socket.emit("peer:negotiation", { offer, to: remoteSocketId });
-  }, [remoteSocketId, socket]);
+  }, [peer, remoteSocketId, socket]);
 
   const handleIncomingNegotiation = useCallback(
     async ({ from, offer }) => {
       const ans = await peer.getAnswer(offer);
       socket.emit("peer:nego:done", { to: from, ans });
     },
-    [socket]
+    [peer, socket]
   );
 
-  const handleNegotiationFinal = useCallback(async ({ ans }) => {
-    await peer.setLocalDescription(ans);
-  }, []);
+  const handleNegotiationFinal = useCallback(
+    async ({ ans }) => {
+      await peer.setLocalDescription(ans);
+    },
+    [peer]
+  );
 
-  const handleIceCandidate = useCallback(({ candidate }) => {
-    if (candidate) {
-      peer.addIceCandidate(new RTCIceCandidate(candidate));
-    }
-  }, []);
+  const handleIceCandidate = useCallback(
+    ({ candidate }) => {
+      if (candidate) {
+        peer.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    },
+    [peer]
+  );
 
-  // Set up ICE candidate event listener
   useEffect(() => {
     const onIceCandidate = (event) => {
       if (event.candidate) {
@@ -102,23 +109,22 @@ const RoomPage = () => {
     return () => {
       peer.peer.onicecandidate = null;
     };
-  }, [socket, remoteSocketId]);
+  }, [peer, socket, remoteSocketId]);
 
   useEffect(() => {
     peer.peer.addEventListener("negotiationneeded", handleNegotiation);
     return () => {
       peer.peer.removeEventListener("negotiationneeded", handleNegotiation);
     };
-  }, [handleNegotiation]);
+  }, [peer, handleNegotiation]);
 
   useEffect(() => {
     peer.peer.addEventListener("track", (ev) => {
       const [stream] = ev.streams;
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
     });
-  }, []);
+  }, [peer]);
 
-  // Prepare local media stream once on component mount
   useEffect(() => {
     const initMedia = async () => {
       try {
@@ -141,7 +147,7 @@ const RoomPage = () => {
     return () => {
       myStream.current?.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [peer]);
 
   useEffect(() => {
     socket.on("user:joined", handleUserJoined);
@@ -168,6 +174,11 @@ const RoomPage = () => {
     handleIncomingNegotiation,
     handleNegotiationFinal,
   ]);
+
+  const handleSendMessage = () => {
+    peer.sendMessage(message);
+    setMessage("");
+  };
 
   return (
     <div>
@@ -204,6 +215,18 @@ const RoomPage = () => {
             style={{ transform: "scaleX(-1)" }}
             ref={remoteVideoRef}
           />
+        </div>
+      )}
+      {remoteSocketId && (
+        <div>
+          <h2>Chat</h2>
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Enter message"
+          />
+          <button onClick={handleSendMessage}>Send Message</button>
         </div>
       )}
     </div>
