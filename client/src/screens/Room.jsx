@@ -9,6 +9,7 @@ const RoomPage = () => {
   const [audioEnable, setAudioEnable] = useState(true);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]); // State to store chat messages
+  const [receivedFiles, setReceivedFiles] = useState([]);
 
   const myVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -22,8 +23,52 @@ const RoomPage = () => {
     ]);
   };
 
+const handleReceivedFile = useCallback((data) => {
+  // Check if data is a string (metadata) or ArrayBuffer (file data)
+  if (typeof data === "string") {
+    // Attempt to parse it as JSON metadata
+    try {
+      const metadata = JSON.parse(data);
+      if (metadata.fileName && metadata.fileSize) {
+        setReceivedFiles((prev) => [
+          ...prev,
+          {
+            url: null,
+            name: metadata.fileName,
+            size: metadata.fileSize,
+            receivedData: [],
+          },
+        ]);
+        return;
+      }
+    } catch (e) {
+      console.error("Failed to parse metadata:", e);
+    }
+  } else if (data instanceof ArrayBuffer) {
+    // Add binary data (file chunk) to the last file entry in receivedFiles
+    setReceivedFiles((prev) => {
+      const lastFile = prev[prev.length - 1];
+      if (lastFile) {
+        lastFile.receivedData.push(data);
+        return [...prev];
+      }
+      return prev;
+    });
+  }
+}, []);
+
+
+
+  useEffect(() => {
+    return () => {
+      receivedFiles.forEach((fileUrl) => URL.revokeObjectURL(fileUrl));
+    };
+  }, [receivedFiles]);
+
   // Instantiate PeerServices with the callback for receiving messages
-  const [peer] = useState(new PeerServices(handleReceivedMessage));
+  const [peer] = useState(
+    new PeerServices(handleReceivedMessage, handleReceivedFile)
+  );
 
   const addMessage = (text, fromSelf) => {
     setMessages((prevMessages) => [...prevMessages, { text, fromSelf }]);
@@ -48,8 +93,8 @@ const RoomPage = () => {
   };
 
   const handleUserJoined = useCallback(({ email, id }) => {
-    console.log("Email", email, "has joined");
     setRemoteSocketId(id);
+    addMessage(`${email} has joined the room.`, false);
   }, []);
 
   const handleUserCall = useCallback(async () => {
@@ -196,6 +241,11 @@ const RoomPage = () => {
     setMessage("");
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) peer.sendFile(file);
+  };
+
   return (
     <div>
       <h1>Room Page</h1>
@@ -261,6 +311,26 @@ const RoomPage = () => {
             placeholder="Enter message"
           />
           <button onClick={handleSendMessage}>Send Message</button>
+          <div>
+            <h2>File Sharing</h2>
+            <input type="file" onChange={handleFileSelect} />
+          </div>
+          <div>
+            <h3>Received Files</h3>
+            {receivedFiles.map((file, index) => {
+              if (file.receivedData) {
+                const fileBlob = new Blob(file.receivedData);
+                const fileUrl = URL.createObjectURL(fileBlob);
+                return (
+                  <div key={index}>
+                    <a href={fileUrl} download={file.name}>
+                      Download {file.name}
+                    </a>
+                  </div>
+                );
+              }
+            })}
+          </div>
         </div>
       )}
     </div>
