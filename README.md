@@ -41,7 +41,7 @@ This project enables real-time communication between users through video and aud
 1. **Clone the Repository**
 
    ```bash
-   git clone https://github.com/your-username/webrtc-project.git
+   git clone https://github.com/Adityajparmar37/webrtc-project.git
    cd webrtc-project
     ```
 
